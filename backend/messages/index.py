@@ -31,7 +31,7 @@ def escape(s: str) -> str:
 
 
 def handler(event: dict, context) -> dict:
-    """Сохранение и получение анонимных сообщений."""
+    """Сообщения: получение, создание (с поддержкой тредов), лайки."""
     if event.get("httpMethod") == "OPTIONS":
         return {"statusCode": 200, "headers": CORS_HEADERS, "body": ""}
 
@@ -43,50 +43,52 @@ def handler(event: dict, context) -> dict:
         body = json.loads(event.get("body") or "{}")
         content = (body.get("content") or "").strip()
         category = (body.get("category") or "general").strip()
+        parent_id = body.get("parent_id")
 
         if not content or len(content) < 5:
             conn.close()
-            return {
-                "statusCode": 400,
-                "headers": CORS_HEADERS,
-                "body": json.dumps({"error": "Сообщение слишком короткое"}),
-            }
+            return {"statusCode": 400, "headers": CORS_HEADERS, "body": json.dumps({"error": "Сообщение слишком короткое"})}
 
         if len(content) > 2000:
             conn.close()
-            return {
-                "statusCode": 400,
-                "headers": CORS_HEADERS,
-                "body": json.dumps({"error": "Сообщение слишком длинное (макс. 2000 символов)"}),
-            }
+            return {"statusCode": 400, "headers": CORS_HEADERS, "body": json.dumps({"error": "Сообщение слишком длинное (макс. 2000 символов)"})}
 
-        sql = f"INSERT INTO {SCHEMA}.messages (content, category) VALUES ('{escape(content)}', '{escape(category)}') RETURNING id, created_at"
+        if parent_id:
+            sql = f"INSERT INTO {SCHEMA}.messages (content, category, parent_id) VALUES ('{escape(content)}', '{escape(category)}', {int(parent_id)}) RETURNING id, created_at"
+        else:
+            sql = f"INSERT INTO {SCHEMA}.messages (content, category) VALUES ('{escape(content)}', '{escape(category)}') RETURNING id, created_at"
+
         cur.execute(sql)
         row = cur.fetchone()
         conn.close()
-
-        return {
-            "statusCode": 201,
-            "headers": CORS_HEADERS,
-            "body": json.dumps({"id": row[0], "created_at": str(row[1])}),
-        }
+        return {"statusCode": 201, "headers": CORS_HEADERS, "body": json.dumps({"id": row[0], "created_at": str(row[1])})}
 
     if method == "GET":
-        cur.execute(
-            f"SELECT id, content, category, created_at, likes FROM {SCHEMA}.messages ORDER BY created_at DESC LIMIT 50"
-        )
-        rows = cur.fetchall()
-        conn.close()
+        params = event.get("queryStringParameters") or {}
+        thread_id = params.get("thread_id")
 
-        messages = [
-            {"id": r[0], "content": r[1], "category": r[2], "created_at": str(r[3]), "likes": r[4] or 0}
-            for r in rows
-        ]
-        return {
-            "statusCode": 200,
-            "headers": CORS_HEADERS,
-            "body": json.dumps({"messages": messages}),
-        }
+        if thread_id:
+            cur.execute(
+                f"SELECT id, content, category, created_at, likes, parent_id FROM {SCHEMA}.messages WHERE (id = {int(thread_id)} OR parent_id = {int(thread_id)}) AND is_hidden = FALSE ORDER BY created_at ASC"
+            )
+            rows = cur.fetchall()
+            conn.close()
+            messages = [{"id": r[0], "content": r[1], "category": r[2], "created_at": str(r[3]), "likes": r[4] or 0, "parent_id": r[5]} for r in rows]
+        else:
+            cur.execute(
+                f"SELECT id, content, category, created_at, likes, parent_id FROM {SCHEMA}.messages WHERE parent_id IS NULL AND is_hidden = FALSE ORDER BY created_at DESC LIMIT 100"
+            )
+            rows = cur.fetchall()
+            ids = [str(r[0]) for r in rows]
+            reply_counts = {}
+            if ids:
+                cur.execute(f"SELECT parent_id, COUNT(*) FROM {SCHEMA}.messages WHERE parent_id IN ({','.join(ids)}) AND is_hidden = FALSE GROUP BY parent_id")
+                for rc in cur.fetchall():
+                    reply_counts[rc[0]] = rc[1]
+            conn.close()
+            messages = [{"id": r[0], "content": r[1], "category": r[2], "created_at": str(r[3]), "likes": r[4] or 0, "parent_id": r[5], "reply_count": reply_counts.get(r[0], 0)} for r in rows]
+
+        return {"statusCode": 200, "headers": CORS_HEADERS, "body": json.dumps({"messages": messages})}
 
     if method == "PUT":
         body = json.loads(event.get("body") or "{}")
@@ -95,20 +97,14 @@ def handler(event: dict, context) -> dict:
             conn.close()
             return {"statusCode": 400, "headers": CORS_HEADERS, "body": json.dumps({"error": "id required"})}
 
-        cur.execute(
-            f"UPDATE {SCHEMA}.messages SET likes = likes + 1 WHERE id = {msg_id} RETURNING likes"
-        )
+        cur.execute(f"UPDATE {SCHEMA}.messages SET likes = likes + 1 WHERE id = {msg_id} AND is_hidden = FALSE RETURNING likes")
         row = cur.fetchone()
         conn.close()
 
         if not row:
             return {"statusCode": 404, "headers": CORS_HEADERS, "body": json.dumps({"error": "not found"})}
 
-        return {
-            "statusCode": 200,
-            "headers": CORS_HEADERS,
-            "body": json.dumps({"likes": row[0]}),
-        }
+        return {"statusCode": 200, "headers": CORS_HEADERS, "body": json.dumps({"likes": row[0]})}
 
     conn.close()
     return {"statusCode": 405, "headers": CORS_HEADERS, "body": json.dumps({"error": "Method not allowed"})}

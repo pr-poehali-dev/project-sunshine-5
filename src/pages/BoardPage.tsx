@@ -1,27 +1,10 @@
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { getBoardBySlug, BOARDS } from "@/lib/boards";
+import { getBoardBySlug } from "@/lib/boards";
 import BoardHeader from "@/components/BoardHeader";
 import Icon from "@/components/ui/icon";
-
-const API_URL = "https://functions.poehali.dev/3d44cc6a-f7a3-46d2-9dc5-29271796b26a";
-
-interface Message {
-  id: number;
-  content: string;
-  category: string;
-  created_at: string;
-  likes: number;
-}
-
-function timeAgo(dateStr: string) {
-  const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-  if (diff < 60) return "только что";
-  if (diff < 3600) return `${Math.floor(diff / 60)} мин назад`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} ч назад`;
-  return `${Math.floor(diff / 86400)} д назад`;
-}
+import { MESSAGES_URL, Message, timeAgo } from "@/lib/api";
 
 type PostStatus = "idle" | "loading" | "success" | "error";
 
@@ -41,7 +24,7 @@ export default function BoardPage() {
 
   async function fetchMessages() {
     try {
-      const res = await fetch(API_URL);
+      const res = await fetch(MESSAGES_URL);
       const data = await res.json();
       const all: Message[] = data.messages || [];
       setMessages(all.filter((m) => m.category === slug));
@@ -62,7 +45,7 @@ export default function BoardPage() {
     if (liked.has(id) || likingId === id) return;
     setLikingId(id);
     try {
-      const res = await fetch(API_URL, {
+      const res = await fetch(MESSAGES_URL, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
@@ -83,7 +66,7 @@ export default function BoardPage() {
     setPostStatus("loading");
     setErrorMsg("");
     try {
-      const res = await fetch(API_URL, {
+      const res = await fetch(MESSAGES_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: content.trim(), category: slug }),
@@ -216,18 +199,34 @@ export default function BoardPage() {
                   <span>{timeAgo(msg.created_at)}</span>
                 </div>
                 <p className="text-neutral-200 leading-relaxed whitespace-pre-wrap text-sm mb-4">{msg.content}</p>
-                <button
-                  onClick={() => handleLike(msg.id)}
-                  disabled={liked.has(msg.id) || likingId === msg.id}
-                  className={`flex items-center gap-1.5 text-xs font-mono transition-colors ${
-                    liked.has(msg.id) ? "text-red-500 cursor-default" : "text-neutral-700 hover:text-red-500"
-                  }`}
-                >
-                  <motion.span animate={liked.has(msg.id) ? { scale: [1, 1.5, 1] } : {}} transition={{ duration: 0.25 }}>
-                    <Icon name="Heart" size={12} className={liked.has(msg.id) ? "fill-red-500" : ""} />
-                  </motion.span>
-                  {msg.likes > 0 ? msg.likes : "лайк"}
-                </button>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={() => handleLike(msg.id)}
+                      disabled={liked.has(msg.id) || likingId === msg.id}
+                      className={`flex items-center gap-1.5 text-xs font-mono transition-colors ${
+                        liked.has(msg.id) ? "text-red-500 cursor-default" : "text-neutral-700 hover:text-red-500"
+                      }`}
+                    >
+                      <motion.span animate={liked.has(msg.id) ? { scale: [1, 1.5, 1] } : {}} transition={{ duration: 0.25 }}>
+                        <Icon name="Heart" size={12} className={liked.has(msg.id) ? "fill-red-500" : ""} />
+                      </motion.span>
+                      {msg.likes > 0 ? msg.likes : "лайк"}
+                    </button>
+                    {(msg.reply_count ?? 0) > 0 && (
+                      <span className="text-neutral-700 text-xs font-mono flex items-center gap-1">
+                        <Icon name="MessageSquare" size={11} />
+                        {msg.reply_count}
+                      </span>
+                    )}
+                  </div>
+                  <Link
+                    to={`/board/${slug}/thread/${msg.id}`}
+                    className="text-neutral-700 hover:text-neutral-400 text-xs font-mono flex items-center gap-1 transition-colors"
+                  >
+                    открыть тред <Icon name="ArrowRight" size={11} />
+                  </Link>
+                </div>
               </motion.div>
             ))}
           </div>

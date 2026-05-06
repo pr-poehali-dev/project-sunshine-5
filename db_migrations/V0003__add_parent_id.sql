@@ -1,0 +1,1 @@
+ALTER TABLE t_p43524458_project_sunshine_5.messages ADD COLUMN parent_id INTEGER NULL;
