@@ -34,10 +34,10 @@ export default function Hero() {
           Место, где можно говорить честно. Без имени, без страха, без осуждения.
         </p>
         <a
-          href="#share"
+          href="#boards"
           className="mt-8 inline-block bg-white text-black px-8 py-3 text-sm uppercase tracking-wide font-medium hover:bg-neutral-200 transition-colors duration-300"
         >
-          Поделиться анонимно
+          Выбрать доску
         </a>
       </div>
     </div>

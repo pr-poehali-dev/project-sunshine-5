@@ -2,7 +2,7 @@ import Header from "@/components/Header";
 import Hero from "@/components/Hero";
 import Featured from "@/components/Featured";
 import AnonymousForm from "@/components/AnonymousForm";
-import MessageFeed from "@/components/MessageFeed";
+import BoardsShowcase from "@/components/BoardsShowcase";
 import Promo from "@/components/Promo";
 import Footer from "@/components/Footer";
 
@@ -12,8 +12,8 @@ const Index = () => {
       <Header />
       <Hero />
       <Featured />
+      <BoardsShowcase />
       <AnonymousForm />
-      <MessageFeed />
       <Promo />
       <Footer />
     </main>
