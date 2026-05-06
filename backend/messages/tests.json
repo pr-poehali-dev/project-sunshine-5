@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "name": "GET messages",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "POST message",
+      "method": "POST",
+      "path": "/",
+      "body": { "content": "Тестовое анонимное сообщение", "category": "general" },
+      "expectedStatus": 201
+    }
+  ]
+}
