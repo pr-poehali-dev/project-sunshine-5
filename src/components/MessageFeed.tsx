@@ -25,6 +25,7 @@ interface Message {
   content: string;
   category: string;
   created_at: string;
+  likes: number;
 }
 
 function timeAgo(dateStr: string) {
@@ -39,6 +40,8 @@ export default function MessageFeed() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
+  const [liked, setLiked] = useState<Set<number>>(new Set());
+  const [likingId, setLikingId] = useState<number | null>(null);
 
   async function fetchMessages() {
     try {
@@ -55,6 +58,25 @@ export default function MessageFeed() {
     const interval = setInterval(fetchMessages, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  async function handleLike(id: number) {
+    if (liked.has(id) || likingId === id) return;
+    setLikingId(id);
+    try {
+      const res = await fetch(API_URL, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessages((prev) => prev.map((m) => m.id === id ? { ...m, likes: data.likes } : m));
+        setLiked((prev) => new Set(prev).add(id));
+      }
+    } finally {
+      setLikingId(null);
+    }
+  }
 
   const filtered = filter === "all" ? messages : messages.filter((m) => m.category === filter);
 
@@ -117,7 +139,28 @@ export default function MessageFeed() {
                     </span>
                     <span className="text-xs text-neutral-400">{timeAgo(msg.created_at)}</span>
                   </div>
-                  <p className="text-neutral-800 leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                  <p className="text-neutral-800 leading-relaxed whitespace-pre-wrap mb-4">{msg.content}</p>
+                  <button
+                    onClick={() => handleLike(msg.id)}
+                    disabled={liked.has(msg.id) || likingId === msg.id}
+                    className={`flex items-center gap-1.5 text-sm transition-all duration-200 ${
+                      liked.has(msg.id)
+                        ? "text-red-500 cursor-default"
+                        : "text-neutral-400 hover:text-red-500"
+                    }`}
+                  >
+                    <motion.div
+                      animate={liked.has(msg.id) ? { scale: [1, 1.4, 1] } : {}}
+                      transition={{ duration: 0.3 }}
+                    >
+                      <Icon
+                        name="Heart"
+                        size={15}
+                        className={liked.has(msg.id) ? "fill-red-500" : ""}
+                      />
+                    </motion.div>
+                    <span>{msg.likes > 0 ? msg.likes : ""}</span>
+                  </button>
                 </motion.div>
               ))}
             </div>

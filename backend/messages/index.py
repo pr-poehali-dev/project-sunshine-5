@@ -6,7 +6,7 @@ SCHEMA = "t_p43524458_project_sunshine_5"
 
 CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
 }
 
@@ -73,19 +73,41 @@ def handler(event: dict, context) -> dict:
 
     if method == "GET":
         cur.execute(
-            f"SELECT id, content, category, created_at FROM {SCHEMA}.messages ORDER BY created_at DESC LIMIT 50"
+            f"SELECT id, content, category, created_at, likes FROM {SCHEMA}.messages ORDER BY created_at DESC LIMIT 50"
         )
         rows = cur.fetchall()
         conn.close()
 
         messages = [
-            {"id": r[0], "content": r[1], "category": r[2], "created_at": str(r[3])}
+            {"id": r[0], "content": r[1], "category": r[2], "created_at": str(r[3]), "likes": r[4] or 0}
             for r in rows
         ]
         return {
             "statusCode": 200,
             "headers": CORS_HEADERS,
             "body": json.dumps({"messages": messages}),
+        }
+
+    if method == "PUT":
+        body = json.loads(event.get("body") or "{}")
+        msg_id = int(body.get("id") or 0)
+        if not msg_id:
+            conn.close()
+            return {"statusCode": 400, "headers": CORS_HEADERS, "body": json.dumps({"error": "id required"})}
+
+        cur.execute(
+            f"UPDATE {SCHEMA}.messages SET likes = likes + 1 WHERE id = {msg_id} RETURNING likes"
+        )
+        row = cur.fetchone()
+        conn.close()
+
+        if not row:
+            return {"statusCode": 404, "headers": CORS_HEADERS, "body": json.dumps({"error": "not found"})}
+
+        return {
+            "statusCode": 200,
+            "headers": CORS_HEADERS,
+            "body": json.dumps({"likes": row[0]}),
         }
 
     conn.close()
